@@ -5,7 +5,7 @@ from bot.states.main import StateBot
 
 async def start(msg: Message):
     await msg.answer(f'Привет,{msg.from_user.username}👋🏻\n'
-                     f'Присылай QR-код и я отправлю всю информацию о нём')
+                     f'Присылай QR-код или ссылку и я отправлю всю информацию о нём')
     await StateBot.processing_qr.set()
 
 
