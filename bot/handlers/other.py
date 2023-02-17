@@ -1,7 +1,7 @@
 import random
 import requests
 from aiogram import Dispatcher
-from aiogram.types import Message, ContentType
+from aiogram.types import Message
 from bot.states.main import StateBot
 
 
