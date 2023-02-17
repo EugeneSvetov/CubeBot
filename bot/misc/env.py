@@ -3,4 +3,4 @@ from typing import Final
 
 
 class TgKeys:
-    TOKEN: Final = environ.get('TOKEN', 'define me!')
+    TOKEN: Final = environ.get('TOKEN', 'sheesh')
