@@ -1,28 +1,35 @@
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import MetaData, Table, Column, Integer, create_engine, String, insert, BigInteger, ForeignKey
-import sqlalchemy
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy import MetaData, Column, Integer, String, BigInteger, ForeignKey
+from sqlalchemy.orm import sessionmaker
 
+DATABASE_URL = "postgresql+asyncpg://postgres:Pesochek06@localhost"
+
+engine = create_async_engine(DATABASE_URL, echo=True)
 Base = declarative_base()
-engine = create_engine('sqlite:///sqlite3.db', echo=True)
+
+DB_CONFIG = {
+    'host': '127.0.0.1',
+    'user': 'postgres',
+    'password': 'Pesochek06',
+    'port': 5432,
+    'database': 'postgres'
+}
 
 meta = MetaData()
-MetaData.reflect(meta, bind=engine)
 
-session = Session(bind=engine)
+async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
 class Users(Base):
     __tablename__ = "users"
     tg_id = Column(BigInteger, primary_key=True)
-    comment = Column(String, ForeignKey("comments.pk"))
 
 
 class Urls(Base):
     __tablename__ = "urls"
     pk = Column(Integer, primary_key=True)
     url = Column(String)
-    score = Column(String, ForeignKey("scores.pk"))
 
 
 class Scores(Base):
@@ -30,15 +37,19 @@ class Scores(Base):
     pk = Column(Integer, primary_key=True)
     positive = Column(Integer)
     negative = Column(Integer)
-    url = Column(String, ForeignKey("urls.pk"))
+    url = Column(Integer, ForeignKey("urls.pk"))
 
 
 class Comments(Base):
     __tablename__ = "comments"
     pk = Column(Integer, primary_key=True)
-    author = Column(String, ForeignKey("users.tg_id"))
-    url = Column(String, ForeignKey("urls.pk"))
+    author = Column(BigInteger, ForeignKey("users.tg_id"))
+    url = Column(Integer, ForeignKey("urls.pk"))
     text = Column(String)
 
-
-
+# async def init_models():
+#     async with engine.begin() as conn:
+#         await conn.run_sync(Base.metadata.drop_all)
+#         await conn.run_sync(Base.metadata.create_all)
+#
+# asyncio.run(init_models())
