@@ -12,8 +12,8 @@ async def start(msg: Message):
         if b.scalars().all() == []:
             await session.execute(insert(Users).values(tg_id=msg.from_user.id))
             await session.commit()
-    await msg.answer(f'Привет,{msg.from_user.username}👋🏻\n'
-                     f'Присылай QR-код или ссылку и я отправлю всю информацию о нём')
+    await msg.answer(f'Здравствуйте, {msg.from_user.username}👋🏻\n'
+                     f'Отправьте мне QR-код или ссылку, а я отправлю вам всю информацию о них')
     await StateBot.processing_qr.set()
 
 

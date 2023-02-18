@@ -1,80 +1,147 @@
 import random
-import requests
+import base64
+import re
+
 from aiogram import Dispatcher
 from aiogram.types import Message, CallbackQuery
+from aiohttp import ClientConnectorError, ContentTypeError
 from sqlalchemy import insert, select, update
-from bot.keyboards.inline import inline_kb1
-from bot.database.main import async_session, Users, Urls, Scores
+import aiohttp
+from bot.database.main import async_session, Urls, Scores, Comments
+from bot.keyboards.inline import inline_kb1, inline_kb2
 from bot.states.main import StateBot
 
 
 async def get_qr(msg: Message, state: StateBot.processing_qr):
     if msg.photo:
-        await msg.answer('Обработка началась')
-        await msg.answer(f'Твой код {random.choice(["вредоносный", "безопасный"])}')
+        await msg.photo[-1].download(f'bot/media/{msg.photo[0]["file_unique_id"]}.jpg')
+        with open(f'bot/media/{msg.photo[0]["file_unique_id"]}.jpg', "rb") as f:
+            bytes_ = bytes(f.read())
+        encoded = base64.b64encode(bytes_)
+        data = encoded.decode('ascii')
+        async with aiohttp.ClientSession() as session:
+            a = await session.post('http://127.0.0.1:8000/check_qr', json={'file': data})
+            result = await a.json()
+        if result['data'] == 'Не найдены qr коды на фото!':
+            await msg.answer(result['data'])
+        else:
+            result = re.search(r'https?://[\w\-.]+/?', result['data']).group(0)
     elif msg.text:
         try:
-            requests.get(url=msg.text, timeout=3)
-            async with async_session() as session:
-                a = select(Urls).where(Urls.url == msg.text)
-                b = await session.execute(a)
-                if b.scalars().all() == []:
-                    await session.execute(insert(Urls).values(url=msg.text))
-                    await session.commit()
-                else:
-                    d = await session.execute(select(Urls.pk).where(Urls.url == msg.text))
-                    d = int(d.scalars().all()[0])
-                    pk = await session.execute(select(Scores.pk).where(Scores.url == d))
-                    pk = pk.scalars().all()
-                    if pk == []:
-                        await msg.answer(f'ваша ссылка {random.choice(["вредоносная", "безопасная"])}')
-                    else:
-                        positive = await session.execute(
-                            select(Scores.positive).where(Scores.pk == int(pk[0])))
-                        negative = await session.execute(
-                            select(Scores.negative).where(Scores.url == int(pk[0])))
-                        await msg.answer(f'ваша ссылка {random.choice(["вредоносная", "безопасная"])}\n'
-                                         f'Оценки:\n'
-                                         f'Положительных:{positive.scalars().all()[0]}\n'
-                                         f'Отрицательных:{negative.scalars().all()[0]}', reply_markup=inline_kb1)
-                        await state.update_data(pk=pk)
-        except requests.exceptions.MissingSchema:
-            await msg.answer('это не ссылка')
-        except requests.exceptions.InvalidURL:
+            async with aiohttp.ClientSession() as session:
+                await session.get(msg.text, timeout=5)
+        except aiohttp.InvalidURL:
             await msg.answer('Неверная ссылка')
-        except requests.exceptions.InvalidSchema:
-            await msg.answer('Неверная ссылка')
-        except requests.ConnectionError:
-            await msg.answer('Неверная ссылка')
-        except requests.exceptions.ReadTimeout:
-            await msg.answer('Неверная ссылка')
-        except requests.exceptions:
-            await msg.answer('Неверная ссылка')
+        except TimeoutError:
+            await msg.answer('Не удалось осуществить запрос')
+        except AssertionError:
+            await msg.answer('Пожалуйста, отправьте кореектную ссылку')
+        except ClientConnectorError:
+            await msg.answer('Пожалуйста, отправьте кореектную ссылку')
+        except AttributeError:
+            await msg.answer('Пожалуйста, отправьте кореектную ссылку')
+        except ContentTypeError:
+            await msg.answer('Пожалуйста, отправьте кореектную ссылку')
+
+        result = re.search(r'https?://[\w\-.]+/?', msg.text).group(0)
     else:
-        await msg.answer('ты какую-то хуйню прислал')
+        await msg.answer('Пожалуйста, отправьте ссылку или QR-код')
 
-
-async def report(callback_query: CallbackQuery, state: StateBot.processing_qr):
-    user_data = await state.get_data()
-    pk = int(user_data['pk'][0])
     async with async_session() as session:
-        if callback_query.data == '1':
-            positive = await session.execute(
-                select(Scores.positive).where(Scores.url == pk))
-            positive = int(positive.scalars().all()[0])
-            a = update(Scores).where(Scores.url == pk).values(positive=positive+1)
-            await session.execute(a)
+        a = select(Urls.pk).where(Urls.url == result)
+        b = await session.execute(a)
+        b = b.scalars().all()
+        if b == []:
+            await session.execute(insert(Urls).values(url=result))
             await session.commit()
-            await callback_query.message.edit_reply_markup()
+            a = select(Urls.pk).where(Urls.url == result)
+            b = await session.execute(a)
+            b = b.scalars().all()
+            await session.execute(insert(Scores).values(url=b[0], positive=0, negative=0))
+            await session.commit()
+        c = select(Comments.text).where(Comments.url == b[0])
+        e = await session.execute(c)
+        e = e.scalars().all()
+        d = await session.execute(select(Urls.pk).where(Urls.url == result))
+        pk = int(d.scalars().all()[0])
+        positive = await session.execute(
+            select(Scores.positive).where(Scores.url == pk))
+        negative = await session.execute(
+            select(Scores.negative).where(Scores.url == pk))
+        positive = positive.scalars().all()
+        negative = negative.scalars().all()
+        async with aiohttp.ClientSession() as session:
+            a = await session.post('http://127.0.0.1:8000/phishing', json={'url':result})
+            result1 = await a.json()
+        choice = f'📊 Данные о вашей ссылке:\n\n'\
+        f'🤖 Предсказание нашей модели машинного обучения (с точностью 97%): {result1["predict"]}\n'\
+        f'📃 SSL Сертификат: {["✅ Доступен" if result1["ssl"]["availability"] == True else "❌ Не доступен"][0]} и {["валидный" if result1["ssl"]["invalid_ssl"] == False else "❌ невалидный"][0]}\n'\
+        f'🔄 Перенаправления: {["✅ Остсутвуют" if result1["redirect"] == False else len(result1["redirect"])][0]}\n'\
+        f'🛡 Защищнное соединение: {"✅ Доступно" if result1["is_https"] == True else "❌ Недоступно"}'
+        a = ['✍️ '+ i for i in e]
+        n = "\n\n".join(a)
+        if e == []:
+            await msg.answer(f'{choice}\n\n'
+                         f'Оценки:\n\n'
+                         f'😁 Положительных: {positive[0]}\n'
+                         f'😡 Отрицательных: {negative[0]}\n\n', reply_markup=inline_kb1)
         else:
-            negative = await session.execute(
-                select(Scores.negative).where(Scores.url == pk))
-            negative = int(negative.scalars().all()[0])
-            a = update(Scores).where(Scores.url == pk).values(negative=negative + 1)
+            await msg.answer(f'{choice}\n\n'
+                             f'Оценки:\n\n'
+                             f'😁 Положительных: {positive[0]}\n'
+                             f'😡 Отрицательных: {negative[0]}\n\n'
+                             f'Отзывы:\n\n{n}', reply_markup=inline_kb1)
+        await state.update_data(positive=positive[0], pk=pk, negative=negative[0], choice=choice, url = result, n=n)
+        await session.close()
+
+
+async def score(callback_query: CallbackQuery, state: StateBot.processing_qr):
+    user_data = await state.get_data()
+    pk = user_data['pk']
+    choice = user_data['choice']
+    positive = user_data['positive']
+    negative = user_data['negative']
+    n = user_data['n']
+    if callback_query.data == '1':
+        async with async_session() as session:
+            a = update(Scores).where(Scores.url == pk).values(positive=positive + 1, negative=negative)
             await session.execute(a)
             await session.commit()
-            await callback_query.message.edit_reply_markup()
+        await callback_query.message.edit_text(f'{choice}\n\n'
+                                               f'Оценки:\n\n'
+                                               f'😁 Положительных: {positive + 1}\n'
+                                               f'😡 Отрицательных: {negative}\n\n'
+                                               f'Отзывы:\n\n{n}')
+        await callback_query.message.edit_reply_markup(inline_kb2)
+    elif callback_query.data == '0':
+        async with async_session() as session:
+            a = update(Scores).where(Scores.url == pk).values(negative=negative + 1, positive=positive)
+            await session.execute(a)
+            await session.commit()
+        await callback_query.message.edit_text(f'{choice}\n\n'
+                                               f'Оценки:\n\n'
+                                               f'😁 Положительных: {positive}\n'
+                                               f'😡 Отрицательных: {negative + 1}\n\n'
+                                               f'Отзывы:\n\n{n}')
+        await callback_query.message.edit_reply_markup(inline_kb2)
+    if callback_query.data == 'report':
+        await callback_query.message.answer('Поделитесь своим мнение о сайте')
+        await StateBot.reporting.set()
+
+
+async def report(msg: Message, state: StateBot.reporting):
+    data = await state.get_data()
+    async with async_session() as session:
+        a = select(Urls.pk).where(Urls.url == data['url'])
+        b = await session.execute(a)
+        b = b.scalars().all()
+        await session.execute(insert(Comments).values(author=msg.from_user.id, url=b[0], text=msg.text))
+        await session.commit()
+    await msg.answer('Ваш отзыв учтён')
+    await StateBot.processing_qr.set()
+
 
 def register_other_handlers(dp: Dispatcher) -> None:
     dp.register_message_handler(get_qr, content_types=['any'], state=StateBot.processing_qr)
-    dp.register_callback_query_handler(report, lambda a: a.data, state=StateBot.processing_qr)
+    dp.register_callback_query_handler(score, lambda a: a.data, state=StateBot.processing_qr)
+    dp.register_message_handler(report, content_types=['text'], state=StateBot.reporting)
