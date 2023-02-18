@@ -29,7 +29,7 @@ async def get_qr(msg: Message, state: StateBot.processing_qr):
     elif msg.text:
         try:
             async with aiohttp.ClientSession() as session:
-                await session.get(msg.text, timeout=5)
+                await session.get(msg.text, timeout=2)
         except aiohttp.InvalidURL:
             await msg.answer('Неверная ссылка')
         except TimeoutError:
