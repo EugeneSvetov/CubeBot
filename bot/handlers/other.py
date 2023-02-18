@@ -73,7 +73,7 @@ async def get_qr(msg: Message, state: StateBot.processing_qr):
         async with aiohttp.ClientSession() as session:
             a = await session.post('http://127.0.0.1:8000/phishing', json={'url':result})
             result1 = await a.json()
-        choice = f'📊 Данные о вашей ссылке:\n\n'\
+        choice = f'📊 Данные о {result}:\n\n'\
         f'🤖 Предсказание нашей модели машинного обучения (с точностью 97%): {result1["predict"]}\n'\
         f'📃 SSL Сертификат: {["✅ Доступен" if result1["ssl"]["availability"] == True else "❌ Не доступен"][0]} и {["валидный" if result1["ssl"]["invalid_ssl"] == False else "❌ невалидный"][0]}\n'\
         f'🔄 Перенаправления: {["✅ Остсутвуют" if result1["redirect"] == False else len(result1["redirect"])][0]}\n'\
